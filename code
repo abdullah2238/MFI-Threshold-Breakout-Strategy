@@ -1,0 +1,57 @@
+//@version=5
+strategy("Custom Volume Strategy", overlay=true)
+
+// Input Variables
+baselinePeriod = input(10, title="Baseline Period")
+smoothingPeriod = input(10, title="Smoothing Period")
+buyThreshold = input(2, title="Buy Threshold")
+sellThreshold = input(-2, title="Sell Threshold")
+mfiLength = input(14, title="MFI Length")
+resonanceThreshold = input(70, title="Resonance Threshold")
+
+// Calculation Methodology
+baselineVolume = ta.sma(volume, baselinePeriod)
+percentageDiff = ((volume - baselineVolume) / baselineVolume) * 100
+smoothedPercentageDiff = ta.sma(percentageDiff, smoothingPeriod)
+
+// MFI Resonance
+mfiValue = ta.mfi(close, mfiLength)
+isMfiResonant = mfiValue >= resonanceThreshold
+
+// Generate Signals
+longCondition = ta.crossover(smoothedPercentageDiff, buyThreshold) and isMfiResonant
+if (longCondition)
+    strategy.close("SELL")
+    strategy.entry("BUY", strategy.long)
+
+shortCondition = ta.crossunder(smoothedPercentageDiff, sellThreshold) and isMfiResonant
+if (shortCondition)
+    strategy.close("BUY")
+    strategy.entry("SELL", strategy.short)
+
+// Plot Shapes
+plotshape(longCondition, title="Buy Signal", location=location.belowbar, color=color.green, style=shape.labelup)
+plotshape(shortCondition, title="Sell Signal", location=location.abovebar, color=color.red, style=shape.labeldown)
+
+// Tracking trades
+var float winningTrades = 0
+var float losingTrades = 0
+
+wasLongAndNowFlat = ta.valuewhen(strategy.position_size[1] > 0 and strategy.position_size == 0, close, 1)
+wasShortAndNowFlat = ta.valuewhen(strategy.position_size[1] < 0 and strategy.position_size == 0, close, 1)
+
+if (wasLongAndNowFlat > strategy.position_avg_price[1])
+    winningTrades := winningTrades + 1
+else if (wasLongAndNowFlat < strategy.position_avg_price[1])
+    losingTrades := losingTrades + 1
+
+if (wasShortAndNowFlat < strategy.position_avg_price[1])
+    winningTrades := winningTrades + 1
+else if (wasShortAndNowFlat > strategy.position_avg_price[1])
+    losingTrades := losingTrades + 1
+
+// Calculate Win Rate
+totalTrades = winningTrades + losingTrades
+winRate = winningTrades / totalTrades * 100
+
+plot(winRate, title="Win Rate", color=color.blue, linewidth=2)
